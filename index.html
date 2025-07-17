@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Reward Eligibility Checker</title>
+  <style>
+    /* [All styles remain the same, unchanged] */
+    /* You can retain your existing styles here */
+  </style>
+</head>
+<body>
+  <button class="toggle-admin" onclick="toggleAdmin()">Admin</button>
+
+  <div class="container">
+    <h1>🏆 Reward Checker</h1>
+    <p class="subtitle">Enter your wallet address to check reward eligibility</p>
+
+    <!-- Admin Upload Section -->
+    <div id="adminSection" class="admin-section">
+      <h3>🔒 Admin Panel - Winners Management</h3>
+      <div class="upload-area">
+        <input type="file" id="csvFile" accept=".csv" style="display: none;">
+        <button onclick="document.getElementById('csvFile').click()" class="upload-btn">
+          📁 Upload CSV File
+        </button>
+        <p class="upload-info">CSV format: wallet address,reward</p>
+        <div class="admin-actions">
+          <button onclick="downloadSample()" class="sample-btn">📄 Download Sample CSV</button>
+          <button onclick="clearWinners()" class="clear-btn">🗑️ Clear All Winners</button>
+        </div>
+      </div>
+      <div id="uploadStatus" class="upload-status"></div>
+      <div id="winnerCount" class="winner-count"></div>
+    </div>
+
+    <form id="eligibilityForm">
+      <div class="form-group">
+        <label for="walletAddress">Wallet Address:</label>
+        <input type="text" id="walletAddress" placeholder="Enter your wallet address (0x...)" required>
+      </div>
+
+      <button type="submit" class="check-btn">Check Eligibility</button>
+    </form>
+
+    <div id="result" class="result">
+      <h3 id="resultTitle"></h3>
+      <div id="resultContent"></div>
+    </div>
+  </div>
+
+  <script>
+    let winners = {
+      '0x742d35Cc6634C0532925a3b8D404E7A47c4A8b3e': {
+        reward: '500 FFG'
+      },
+      '0x8ba1f109551bD432803012645Hac136c99d80207': {
+        reward: '1000 FFG'
+      },
+      '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE': {
+        reward: '750 FFG'
+      }
+    };
+
+    let isAdminAuthenticated = false;
+    const ADMIN_PASSWORD = 'your_secure_password_123'; // Change this!
+
+    function toggleAdmin() {
+      if (!isAdminAuthenticated) {
+        const password = prompt('Enter admin password:');
+        if (password === ADMIN_PASSWORD) {
+          isAdminAuthenticated = true;
+          document.querySelector('.toggle-admin').textContent = 'Admin ✓';
+          document.querySelector('.toggle-admin').style.background = 'rgba(76, 175, 80, 0.3)';
+        } else {
+          alert('Incorrect password. Access denied.');
+          return;
+        }
+      }
+
+      const adminSection = document.getElementById('adminSection');
+      adminSection.style.display = adminSection.style.display === 'none' ? 'block' : 'none';
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      document.getElementById('adminSection').style.display = 'none';
+      updateWinnerCount();
+    });
+
+    function updateWinnerCount() {
+      const count = Object.keys(winners).length;
+      const countDiv = document.getElementById('winnerCount');
+      if (countDiv) {
+        countDiv.textContent = `Current winners in database: ${count}`;
+      }
+    }
+
+    function downloadSample() {
+      const sampleData = `wallet address,reward
+0x742d35Cc6634C0532925a3b8D404E7A47c4A8b3e,500 FFG
+0x8ba1f109551bD432803012645Hac136c99d80207,1000 FFG
+0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE,750 FFG`;
+
+      const blob = new Blob([sampleData], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'winners_sample.csv';
+      a.click();
+      window.URL.revokeObjectURL(url);
+    }
+
+    function clearWinners() {
+      if (confirm('Are you sure you want to clear all winners? This action cannot be undone.')) {
+        winners = {};
+        updateWinnerCount();
+        showUploadStatus('All winners cleared successfully.', 'success');
+      }
+    }
+
+    document.getElementById('csvFile').addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      const statusDiv = document.getElementById('uploadStatus');
+
+      if (!file) return;
+
+      if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
+        showUploadStatus('Please select a CSV file.', 'error');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        try {
+          const csv = event.target.result;
+          const lines = csv.split('\n');
+          const newWinners = {};
+
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (line) {
+              const [walletAddress, reward] = line.split(',').map(item => item.trim());
+
+              if (walletAddress && walletAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+                newWinners[walletAddress] = {
+                  reward: reward || '0 FFG'
+                };
+              }
+            }
+          }
+
+          if (Object.keys(newWinners).length > 0) {
+            winners = newWinners;
+            updateWinnerCount();
+            showUploadStatus(`Successfully uploaded ${Object.keys(newWinners).length} winners!`, 'success');
+          } else {
+            showUploadStatus('No valid winners found in CSV file.', 'error');
+          }
+
+        } catch (error) {
+          showUploadStatus('Error reading CSV file: ' + error.message, 'error');
+        }
+      };
+
+      reader.readAsText(file);
+    });
+
+    function showUploadStatus(message, type) {
+      const statusDiv = document.getElementById('uploadStatus');
+      statusDiv.textContent = message;
+      statusDiv.className = `upload-status ${type}`;
+      statusDiv.style.display = 'block';
+
+      setTimeout(() => {
+        statusDiv.style.display = 'none';
+      }, 5000);
+    }
+
+    document.getElementById('eligibilityForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      const walletAddress = document.getElementById('walletAddress').value.trim();
+      const resultDiv = document.getElementById('result');
+      const resultTitle = document.getElementById('resultTitle');
+      const resultContent = document.getElementById('resultContent');
+
+      if (!walletAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+        resultDiv.className = 'result not-eligible';
+        resultTitle.textContent = '❌ Invalid wallet address format';
+        resultContent.innerHTML = `<p>Please enter a valid Ethereum wallet address starting with "0x".</p>`;
+        resultDiv.style.display = 'block';
+        resultDiv.scrollIntoView({ behavior: 'smooth' });
+        return;
+      }
+
+      const winner = winners[walletAddress];
+
+      if (winner) {
+        resultDiv.className = 'result eligible';
+        resultTitle.textContent = '🎉 Congratulations! You are eligible for rewards!';
+        resultContent.innerHTML = `
+          <div class="reward-amount">${winner.reward}</div>
+          <p><strong>Wallet:</strong> ${walletAddress}</p>
+          <p><strong>Next Steps:</strong> Your reward will be sent within 24–48 hours.</p>
+        `;
+        resultDiv.classList.add('pulse');
+      } else {
+        resultDiv.className = 'result not-eligible';
+        resultTitle.textContent = '❌ Sorry, you are not eligible for rewards';
+        resultContent.innerHTML = `
+          <p><strong>Reason:</strong> This wallet address is not found in our winner database.</p>
+          <p>Please verify your wallet address and try again.</p>
+        `;
+        resultDiv.classList.remove('pulse');
+      }
+
+      resultDiv.style.display = 'block';
+      resultDiv.scrollIntoView({ behavior: 'smooth' });
+    });
+  </script>
+</body>
+</html>
